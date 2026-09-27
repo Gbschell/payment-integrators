@@ -156,7 +156,7 @@ The LinkRouter header says a compromised backend "cannot advance or cancel anyon
   - SUPPORT can freeze a merchant, and 90 days later the super-admin can escheat the whole balance to any address.
   - `skimExcess` is super-admin only.
   - `setPerTxCap` has no upper bound.
-    - *Later (PR #108 review #4):* `setPerTxCap` and `setDailyLimit` now stay inside a [min, max] range (`limitBounds`). Only FINANCE admins, owners and the super-admin can change the range with `setLimitBounds`. The multisig handoff is covered by the deploy tooling.
+    - *Later (PR #108 review #4):* `setPerTxCap` and `setDailyLimit` now stay inside a [min, max] range (`limitBounds`). Only owners and the super-admin can change the range with `setLimitBounds`: any owner may lower a maximum, only the super-admin may raise one (team review, 2026-09-27 — FINANCE admins lost this power, so one finance key can no longer lift the limits). The multisig handoff is covered by the deploy tooling.
 
   Recommendation: put the super-admin behind a multisig with a timelock.
 - **I-5:** The `transferOwnership` comment mentions a "drop-caller branch below" that no longer exists.

@@ -321,9 +321,11 @@ describe("Audit 2026-09 regressions — merchant terminal", function () {
   });
 
   // ─── PR #108 review, blocker #4 — a range around the limits ──────
-  // FINANCE admins / owners / super-admin set a [min, max] range; MANAGER
-  // admins move the limits inside it. Starting range 1-25 a day, 1-100 USDC.
-  describe("review #4: limit range (min/max) set by FINANCE/owners, limits by MANAGER", function () {
+  // Owners and the super-admin set a [min, max] range — any owner may lower a
+  // max, only the super-admin may raise one; FINANCE admins cannot set it.
+  // MANAGER admins move the limits inside it. Starting range 1-25 a day,
+  // 1-100 USDC.
+  describe("review #4: limit range (min/max) set by owners, raised only by the super-admin", function () {
     let finance: SignerWithAddress;
     beforeEach(async function () {
       finance = (await ethers.getSigners())[6];
@@ -354,31 +356,71 @@ describe("Audit 2026-09 regressions — merchant terminal", function () {
       expect(await integrator.perTxCap(INR)).to.equal(USDC(50)); // back to the INR default
     });
 
-    it("a MANAGER cannot change the range — so the max is a real ceiling for them", async function () {
-      await expect(
-        integrator.connect(manager).setLimitBounds(1, 1000, USDC(1), USDC(5000))
-      ).to.be.revertedWithCustomError(integrator, "NotAuthorized");
+    it("no admin role changes the range — FINANCE, MANAGER and SUPPORT included", async function () {
+      // FINANCE is money recovery. Letting it set the range let one finance
+      // key lift the limits to anything (team review): now it is refused.
+      for (const who of [finance, manager, merchant]) {
+        await expect(
+          integrator.connect(who).setLimitBounds(1, 5, USDC(1), USDC(10)) // even LOWERING
+        ).to.be.revertedWithCustomError(integrator, "OnlyOwner");
+      }
       await integrator.connect(owner).setRole(other.address, 2); // SUPPORT
       await expect(
         integrator.connect(other).setLimitBounds(1, 1000, USDC(1), USDC(5000))
-      ).to.be.revertedWithCustomError(integrator, "NotAuthorized");
-      await expect(
-        integrator.connect(merchant).setLimitBounds(1, 1000, USDC(1), USDC(5000))
-      ).to.be.revertedWithCustomError(integrator, "NotAuthorized");
+      ).to.be.revertedWithCustomError(integrator, "OnlyOwner");
+      expect(await integrator.limitBounds()).to.deep.equal([1n, 25n, USDC(1), USDC(100)]);
     });
 
-    it("a FINANCE admin, an owner and the super-admin can all change the range", async function () {
-      await expect(integrator.connect(finance).setLimitBounds(1, 1000, USDC(1), USDC(5000)))
+    it("a FINANCE admin keeps its own powers: it still moves limits inside the range", async function () {
+      await integrator.connect(finance).setDailyLimit(20);
+      await integrator.connect(finance).setPerTxCap(INR, USDC(80));
+      expect(await integrator.dailyLimit()).to.equal(20n);
+      await expect(integrator.connect(finance).setDailyLimit(26)).to.be.revertedWithCustomError(
+        integrator,
+        "LimitOutOfBounds"
+      );
+    });
+
+    it("any owner can LOWER the range, but only the super-admin can RAISE a max", async function () {
+      await integrator.connect(owner).addOwner(other.address); // an owner, not the super-admin
+      // Lowering, and moving a min inside the current max: fine for an owner.
+      await expect(integrator.connect(other).setLimitBounds(2, 20, USDC(5), USDC(80)))
         .to.emit(integrator, "LimitBoundsSet")
-        .withArgs(1, 1000, USDC(1), USDC(5000));
+        .withArgs(2, 20, USDC(5), USDC(80));
+      await integrator.connect(other).setLimitBounds(2, 20, USDC(5), USDC(80)); // same max: not a raise
+      // Raising EITHER max, even by one unit, needs the super-admin.
+      for (const [maxD, maxC] of [
+        [21, USDC(80)],
+        [20, USDC(80) + 1n],
+        [1000, USDC(5000)],
+      ] as [number, bigint][]) {
+        await expect(
+          integrator.connect(other).setLimitBounds(1, maxD, USDC(1), maxC)
+        ).to.be.revertedWithCustomError(integrator, "RaiseNeedsSuperAdmin");
+      }
+      expect(await integrator.limitBounds()).to.deep.equal([2n, 20n, USDC(5), USDC(80)]);
+      // The super-admin can raise it…
+      await expect(integrator.connect(owner).setLimitBounds(1, 800, USDC(1), USDC(3000)))
+        .to.emit(integrator, "LimitBoundsSet")
+        .withArgs(1, 800, USDC(1), USDC(3000));
+      // …an owner can bring it down again, but not back up.
+      await integrator.connect(other).setLimitBounds(1, 100, USDC(1), USDC(500));
+      await expect(
+        integrator.connect(other).setLimitBounds(1, 800, USDC(1), USDC(3000))
+      ).to.be.revertedWithCustomError(integrator, "RaiseNeedsSuperAdmin");
+    });
+
+    it("an owner that is removed loses the power to lower the range too", async function () {
       await integrator.connect(owner).addOwner(other.address);
-      await integrator.connect(other).setLimitBounds(2, 500, USDC(2), USDC(2000));
-      await integrator.connect(owner).setLimitBounds(1, 800, USDC(1), USDC(3000)); // super-admin
-      expect((await integrator.limitBounds())[1]).to.equal(800n);
+      await integrator.connect(other).setLimitBounds(1, 20, USDC(1), USDC(80));
+      await integrator.connect(owner).removeOwner(other.address);
+      await expect(
+        integrator.connect(other).setLimitBounds(1, 10, USDC(1), USDC(50))
+      ).to.be.revertedWithCustomError(integrator, "OnlyOwner");
     });
 
     it("raising the max lets a MANAGER raise the limit — any number the range allows", async function () {
-      await integrator.connect(finance).setLimitBounds(1, 1000, USDC(1), USDC(5000));
+      await integrator.connect(owner).setLimitBounds(1, 1000, USDC(1), USDC(5000)); // super-admin
       await integrator.connect(manager).setDailyLimit(1000);
       await integrator.connect(manager).setPerTxCap(INR, USDC(5000));
       expect(await integrator.dailyLimit()).to.equal(1000n);
@@ -394,7 +436,8 @@ describe("Audit 2026-09 regressions — merchant terminal", function () {
       await integrator.connect(manager).setDailyLimit(20);
       const BRL = ethers.encodeBytes32String("BRL");
       await integrator.connect(manager).setPerTxCap(BRL, USDC(90)); // an existing override
-      await expect(integrator.connect(finance).setLimitBounds(1, 5, USDC(1), USDC(30)))
+      await integrator.connect(owner).addOwner(other.address); // lowering: any owner
+      await expect(integrator.connect(other).setLimitBounds(1, 5, USDC(1), USDC(30)))
         .to.emit(integrator, "DailyLimitSet")
         .withArgs(5); // the live limit is pulled down into the range
       expect(await integrator.dailyLimit()).to.equal(5n);
@@ -403,8 +446,8 @@ describe("Audit 2026-09 regressions — merchant terminal", function () {
       await integrator.connect(merchant).createLink(LINK, 0, INR, 0, 0, CONFIG);
       await expect(placeLinkOrder(31)).to.be.reverted; // over the new cap
       await placeLinkOrder(30);
-      // Raising the min pulls limits up the same way.
-      await integrator.connect(finance).setLimitBounds(10, 50, USDC(40), USDC(100));
+      // Raising the min pulls limits up the same way (raising the max: super-admin).
+      await integrator.connect(owner).setLimitBounds(10, 50, USDC(40), USDC(100));
       expect(await integrator.dailyLimit()).to.equal(10n);
       expect(await integrator.perTxCap(INR)).to.equal(USDC(50)); // default back inside [40, 100]
     });
@@ -420,7 +463,7 @@ describe("Audit 2026-09 regressions — merchant terminal", function () {
       ];
       for (const [a, b, c, d] of bad)
         await expect(
-          integrator.connect(finance).setLimitBounds(a, b, c, d)
+          integrator.connect(owner).setLimitBounds(a, b, c, d)
         ).to.be.revertedWithCustomError(integrator, "LimitOutOfBounds");
     });
   });

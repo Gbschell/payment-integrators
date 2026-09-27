@@ -370,15 +370,19 @@ async function main() {
     I.connect(manager).setLimitBounds(1, 1000, USDC6(1), USDC6(1000)),
     "MANAGER cannot change the range"
   );
-  await tx(I.connect(finance).setLimitBounds(1, 1000, USDC6(1), USDC6(1000)));
-  check((await I.limitBounds())[1] === 1000n, "FINANCE admin widened the range to 1-1000 a day");
+  await reverts(
+    I.connect(finance).setLimitBounds(1, 1000, USDC6(1), USDC6(1000)),
+    "FINANCE admin cannot change the range"
+  );
+  await tx(I.connect(deployer).setLimitBounds(1, 1000, USDC6(1), USDC6(1000)));
+  check((await I.limitBounds())[1] === 1000n, "the super-admin widened the range to 1-1000 a day");
   await tx(I.connect(manager).setDailyLimit(500));
   check((await I.dailyLimit()) === 500n, "…then MANAGER raised the daily limit to 500");
   await place(LINK3);
   check(true, "placement works again after the raise");
   await tx(I.connect(manager).setPerTxCap(INR, USDC6(1000)));
   check((await I.perTxCap(INR)) === USDC6(1000), "MANAGER raised the per-tx cap to 1000 USDC");
-  await tx(I.connect(finance).setLimitBounds(1, 25, USDC6(1), USDC6(100)));
+  await tx(I.connect(deployer).setLimitBounds(1, 25, USDC6(1), USDC6(100)));
   check((await I.dailyLimit()) === 25n, "narrowing the range pulled the daily limit back to 25");
   check((await I.perTxCap(INR)) === USDC6(100), "…and the 1000 USDC cap back to 100 at once");
   await tx(I.connect(manager).setPerTxCap(INR, 0)); // back to the INR default

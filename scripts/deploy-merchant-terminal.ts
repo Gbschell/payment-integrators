@@ -226,7 +226,7 @@ async function main() {
   const [minD, maxD, minC, maxC] = await integrator.limitBounds();
   console.log(
     `LIMIT RANGE:           ${minD}-${maxD} orders/day, ${ethers.formatUnits(minC, 6)}-${ethers.formatUnits(maxC, 6)} USDC/sale` +
-      ` (FINANCE/owners change it with setLimitBounds; MANAGER moves limits inside it)`
+      ` (owners lower it and only the super-admin raises it, with setLimitBounds; MANAGER moves limits inside it)`
   );
   const settlement = await integrator.settlementPeriod();
   console.log(

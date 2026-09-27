@@ -122,6 +122,8 @@ contract MerchantTerminalIntegrator is IP2PIntegrator {
     /// @dev A limit outside the allowed [min, max] range, or a range with
     ///      min > max / min = 0.
     error LimitOutOfBounds();
+    /// @dev Raised by MerchantRegistryLib: only the super-admin may raise a max.
+    error RaiseNeedsSuperAdmin();
     error WithdrawalInFlight();
     error FiatAlreadyDelivered();
     /// @dev deliverFiatPayout called on an order the Diamond no longer holds in
@@ -238,7 +240,8 @@ contract MerchantTerminalIntegrator is IP2PIntegrator {
     event ExcessSkimmed(address indexed to, uint256 amount);
     event PerTxCapSet(bytes32 indexed currency, uint256 cap);
     event DailyLimitSet(uint256 newLimit);
-    /// @notice FINANCE/owners changed the range the limits must stay within.
+    /// @notice An owner (lowering) or the super-admin changed the range the
+    ///         limits must stay within.
     event LimitBoundsSet(uint256 minDaily, uint256 maxDaily, uint256 minCap, uint256 maxCap);
     /// @notice The GLOBAL settlement lock (default for currencies with no override)
     ///         was changed. `newPeriod` is in seconds.
@@ -500,8 +503,9 @@ contract MerchantTerminalIntegrator is IP2PIntegrator {
 
     /// @notice The range the limits must stay within (PR #108 review #4):
     ///         (minDaily, maxDaily, minCap, maxCap), caps in USDC 6-decimals for
-    ///         every currency. FINANCE admins, owners and the super-admin set the
-    ///         range with setLimitBounds; MANAGER admins (and above) set the
+    ///         every currency. Owners and the super-admin set the range with
+    ///         setLimitBounds — any owner may lower a max, only the super-admin
+    ///         may raise one; MANAGER admins (and above) set the
     ///         limits inside it with setDailyLimit / setPerTxCap. Both change from
     ///         the dashboard with no redeploy. Two tiers so the max is a real
     ///         ceiling for MANAGERs: they can move a limit, not its max.
@@ -2155,10 +2159,11 @@ contract MerchantTerminalIntegrator is IP2PIntegrator {
         emit DailyLimitSet(newLimit);
     }
 
-    /// @notice FINANCE admins, owners and the super-admin: set the range the
-    ///         limits must stay within (review #4). MANAGER admins then move the
-    ///         limits inside it, so a MANAGER can never lift a limit past the max
-    ///         the higher tier chose.
+    /// @notice Owners and the super-admin: set the range the limits must stay
+    ///         within (review #4). Any owner may LOWER a max; only the
+    ///         super-admin may RAISE one (RaiseNeedsSuperAdmin), so no single
+    ///         admin key can lift the ceiling. FINANCE admins cannot set the
+    ///         range. MANAGER admins move the limits inside it.
     ///         The live daily limit is pulled into the new range at once; per-tx
     ///         caps are clamped on read (see perTxCap), so narrowing the range
     ///         takes effect immediately everywhere.
@@ -2171,14 +2176,15 @@ contract MerchantTerminalIntegrator is IP2PIntegrator {
         uint256 maxDaily,
         uint256 minCap,
         uint256 maxCap
-    ) external onlyRole(Role.FINANCE) {
+    ) external onlyOwner {
         uint256 d = MerchantRegistryLib.setBounds(
             limitBounds,
             minDaily,
             maxDaily,
             minCap,
             maxCap,
-            dailyLimit
+            dailyLimit,
+            msg.sender == superAdmin
         );
         if (d != dailyLimit) {
             dailyLimit = d;

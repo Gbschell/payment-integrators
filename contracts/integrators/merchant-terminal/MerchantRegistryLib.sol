@@ -29,16 +29,21 @@ library MerchantRegistryLib {
     error InvalidCurrency();
     error BusinessSectorRequired();
     error LimitOutOfBounds();
+    /// @dev Only the super-admin may raise a maximum. One stolen or careless
+    ///      admin key must never be able to lift the ceiling on its own.
+    error RaiseNeedsSuperAdmin();
 
     event PerTxCapSet(bytes32 indexed currency, uint256 cap);
     event LimitBoundsSet(uint256 minDaily, uint256 maxDaily, uint256 minCap, uint256 maxCap);
 
     // ─── Merchant limits and their range (PR #108 review #4) ──────────
     //
-    // FINANCE admins, owners and the super-admin set a [min, max] range
-    // (setBounds); MANAGER admins and above set the limits inside it
-    // (setPerTxCap, checkDailyLimit). Two tiers so a MANAGER can move a limit
-    // but never its max. Here rather than in the integrator for size only.
+    // Owners and the super-admin set a [min, max] range (setBounds); MANAGER
+    // admins and above set the limits inside it (setPerTxCap, checkDailyLimit).
+    // Any owner may LOWER a maximum — the safe direction, and fast in an
+    // emergency — but only the super-admin may RAISE one. FINANCE admins do
+    // not set the range at all: raising it is a risk decision, not money
+    // recovery. Here rather than in the integrator for size only.
 
     /// @dev Per-tx cap when no override is set: India 50 USDC, elsewhere 100.
     uint256 internal constant PER_TX_CAP_INR = 50 * 1e6;
@@ -86,7 +91,8 @@ library MerchantRegistryLib {
         uint256 maxDaily,
         uint256 minCap,
         uint256 maxCap,
-        uint256 dailyLimit
+        uint256 dailyLimit,
+        bool callerIsSuperAdmin
     ) public returns (uint256) {
         if (
             minDaily == 0 ||
@@ -96,6 +102,11 @@ library MerchantRegistryLib {
             minCap > maxCap ||
             maxCap > type(uint64).max
         ) revert LimitOutOfBounds();
+        // Raising a maximum widens what every merchant may take in a day or in
+        // one sale: that needs the super-admin. Lowering one, or moving a
+        // minimum inside the current maximum, never lifts the ceiling.
+        if (!callerIsSuperAdmin && (maxDaily > b.maxDaily || maxCap > b.maxCap))
+            revert RaiseNeedsSuperAdmin();
         b.minDaily = uint64(minDaily);
         b.maxDaily = uint64(maxDaily);
         b.minCap = uint64(minCap);

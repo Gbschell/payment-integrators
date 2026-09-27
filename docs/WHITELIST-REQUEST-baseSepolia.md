@@ -65,7 +65,7 @@ Already set, and checked on-chain:
   - Merchants registered on those integrators are carried over on first use, including the **frozen** flag, instead of registering again.
   - Simulated on-chain against two real merchants: both import.
 - **Limits (starting values):** per-tx cap 50 USDC for INR and 100 USDC otherwise; 25 orders a day; 600 s settlement lock.
-  - **Limit range (see change 3):** starts at 1–25 orders a day and 1–100 USDC a sale (`limitBounds()`). Checked on-chain: `setDailyLimit(1000)` is refused as outside the range; an owner can widen the range with `setLimitBounds`, after which it is accepted; a merchant can change neither.
+  - **Limit range (see change 3):** starts at 1–25 orders a day and 1–100 USDC a sale (`limitBounds()`). Checked on-chain: `setDailyLimit(1000)` is refused as outside the range; the super-admin can widen the range with `setLimitBounds`, after which it is accepted; an owner can only narrow it; a FINANCE admin or a merchant can change neither.
 - **Admin roles copied** from the previous integrators at deployment (`scripts/lib/copyRoles.ts`): every current owner and VIEWER/SUPPORT/MANAGER/FINANCE, read from live state (a revoked admin is not copied). On Base Sepolia the only current role holder is the deployer, who is already root here, so nothing extra was granted.
 
 ## Changes since the currently whitelisted integrator (`0x4c42…`)
@@ -81,7 +81,7 @@ Already set, and checked on-chain:
    - A cancel, or a completion without mark-paid, releases it.
    - Link sales are bounded on-chain again, and pending link orders never block counter (POS) sales.
 3. **A min/max range around the limits (review #4), adjustable, in two tiers.**
-   - `setLimitBounds(minDaily, maxDaily, minCap, maxCap)`, for **FINANCE admins, owners and the super-admin**, sets the range. `limitBounds()` reads it. It starts at 1–25 orders a day and 1–100 USDC a sale.
+   - `setLimitBounds(minDaily, maxDaily, minCap, maxCap)` sets the range. **Owners** may lower it; only the **super-admin** may raise a maximum (`RaiseNeedsSuperAdmin`). FINANCE admins cannot change it. `limitBounds()` reads it. It starts at 1–25 orders a day and 1–100 USDC a sale.
    - `setDailyLimit` / `setPerTxCap`, for **MANAGER admins and above**, move the limits only inside that range (`LimitOutOfBounds` otherwise). A MANAGER can move a limit but never its max.
    - Narrowing the range takes effect at once: the live daily limit is pulled into it, and every per-tx cap (defaults and existing overrides) is clamped on read.
    - Every change emits `LimitBoundsSet` / `DailyLimitSet` / `PerTxCapSet`, and before mainnet the super-admin (who grants the roles) is a multisig.

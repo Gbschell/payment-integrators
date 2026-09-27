@@ -58,8 +58,8 @@ library MerchantTypes {
     }
 
     /// @dev The range the merchant limits must stay within (PR #108 review #4).
-    ///      Set by FINANCE admins / owners; MANAGER admins move the limits
-    ///      inside it. Caps are USDC 6-decimals and apply to every currency.
+    ///      Set by owners (any owner may lower a max; only the super-admin may
+    ///      raise one); MANAGER admins move the limits inside it. Caps are USDC 6-decimals and apply to every currency.
     struct LimitBounds {
         uint64 minDaily;
         uint64 maxDaily;
