@@ -1007,6 +1007,14 @@ describe("LazoCheckoutIntegrator", function () {
       await placeOrder(integrator, A.buyer1, A.v2.address, USDC(1));
     });
 
+    it("settlement token without isBlacklisted (the Base Sepolia GG mock): orders are placed, recorded and released", async function () {
+      const { u, d, i } = await deployStack({ token: "MockUSDC" });
+      const orderId = await placeAndComplete(d, i, A.buyer1, A.v1.address, USDC(100));
+      await time.increase(RETENTION + 1);
+      await (await escrowOf(i, A.v1.address)).release([orderId]);
+      expect(await u.balanceOf(A.v1.address)).to.equal(USDC(100) - feeOf(USDC(100)));
+    });
+
     it("daily volume per vendor: accumulates per vendor and UTC day; exceeding it reverts", async function () {
       await integrator.connect(A.owner).setVendorDailyVolumeLimit(USDC(100));
       // Start at the beginning of a UTC day so the test never crosses midnight.

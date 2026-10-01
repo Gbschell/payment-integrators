@@ -300,7 +300,8 @@ contract LazoCheckoutIntegrator is IP2PIntegrator, Ownable2Step, ReentrancyGuard
      * @notice Validates every starting value against its bounds and deploys
      *         the UserProxy and VendorEscrow implementations.
      * @param _diamond   The P2P Diamond.
-     * @param _usdc      Circle's USDC on this chain (must expose `isBlacklisted`).
+     * @param _usdc      The token the Diamond settles in: Circle's USDC on
+     *                   mainnet. Its `isBlacklisted` is honoured if it has one.
      * @param _owner     The Safe in production, an EOA on testnets. Never
      *                   `msg.sender` implicitly: the deployer key is not the owner.
      * @param cfg        Starting values of everything the owner can change.
@@ -600,12 +601,13 @@ contract LazoCheckoutIntegrator is IP2PIntegrator, Ownable2Step, ReentrancyGuard
         if (vendorConfig[vendor].blocked) revert VendorBlocked();
 
         // A blacklisted escrow would make the Diamond's payout revert; a
-        // blacklisted vendor could never be paid. Real Circle USDC exposes
-        // `isBlacklisted`; this only filters new orders — a blacklist that
-        // lands later makes `release` fail until it is lifted.
+        // blacklisted vendor could never be paid. This only filters new
+        // orders — a blacklist that lands later makes `release` fail until
+        // it is lifted.
         address escrow = escrowAddress(vendor);
-        IFiatTokenBlacklist token = IFiatTokenBlacklist(address(usdc));
-        if (token.isBlacklisted(vendor) || token.isBlacklisted(escrow)) revert VendorBlacklisted();
+        if (_isBlacklisted(vendor) || _isBlacklisted(escrow)) {
+            revert VendorBlacklisted();
+        }
 
         // `validateOrder` never sees the vendor, so the per-vendor limit
         // lives here.
@@ -647,6 +649,19 @@ contract LazoCheckoutIntegrator is IP2PIntegrator, Ownable2Step, ReentrancyGuard
         });
 
         emit OrderPlaced(orderId, msg.sender, vendor, amount);
+    }
+
+    /**
+     * @dev Circle's USDC answers `isBlacklisted`; a settlement token without a
+     *      blacklist (the GoofyGoober mock the Base Sepolia Diamond settles
+     *      in) reverts on it. Only an explicit `true` blocks: a revert or a
+     *      malformed answer means the token has no blacklist to enforce.
+     */
+    function _isBlacklisted(address account) internal view returns (bool) {
+        (bool ok, bytes memory ret) = address(usdc).staticcall(
+            abi.encodeCall(IFiatTokenBlacklist.isBlacklisted, (account))
+        );
+        return ok && ret.length == 32 && abi.decode(ret, (uint256)) == 1;
     }
 
     // ─── STEP 2 · the Diamond asks permission ─────────────────────────

@@ -104,9 +104,10 @@ export async function deployIntegrator(
 }
 
 /**
- * Full stack (USDC + Diamond + integrator). The integrator calls
- * `isBlacklisted` on every order, so the default token is the blacklistable
- * one (Circle's real USDC exposes it).
+ * Full stack (USDC + Diamond + integrator). The integrator honours
+ * `isBlacklisted` when the token has it, so the default token is the
+ * blacklistable one (Circle's real USDC exposes it); `MockUSDC` stands in
+ * for a token without a blacklist.
  */
 export async function deployStack(
   opts: { token?: string; cfg?: ConfigOverrides; ceilings?: Partial<typeof CEILINGS> } = {}

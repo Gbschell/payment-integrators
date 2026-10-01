@@ -94,7 +94,7 @@ already recorded:
 |---|---|---|
 | Pause new orders | `userPlaceOrder` | operator or owner pause; only the owner unpauses |
 | Block a vendor | `userPlaceOrder` | operator or owner block; only the owner unblocks |
-| USDC blacklist of the vendor and its escrow | `userPlaceOrder`, via `isBlacklisted` | automatic |
+| USDC blacklist of the vendor and its escrow | `userPlaceOrder`, via `isBlacklisted` (skipped if the token has none) | automatic |
 | Per-tx cap | `validateOrder` | owner, under `MAX_PER_TX_LIMIT` |
 | Orders per buyer per UTC day | `validateOrder` | owner, under `MAX_DAILY_TX_COUNT_LIMIT` |
 | Volume per vendor per UTC day | `userPlaceOrder` (`validateOrder` never sees the vendor) | owner, under `MAX_VENDOR_DAILY_VOLUME_LIMIT` |
@@ -147,9 +147,10 @@ of the open questions in #109.
 | | Base mainnet | Base Sepolia |
 |---|---|---|
 | P2P Diamond | `0x4cad6eC90e65baBec9335cAd728DDC610c316368` | `0xeb0BB8E3c014D915D9B2df03aBB130a1Fb44beb9` |
-| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | the USDC the Sepolia Diamond settles in, `<TBD>` |
+| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | `0x4095fE4f1E636f11A95820BA2bB87F335Bd1040d` (GoofyGoober mock, 6 decimals) |
 
-No other protocol is called.
+No other protocol is called. The Sepolia mock has no `isBlacklisted`; the integrator
+treats a token without it as having no blacklist, and blocks only on an explicit `true`.
 
 ## Deploying
 
@@ -164,7 +165,8 @@ Basescan verification command and the registration values.
 
 ## Tests
 
-`test/lazo-integrator.test.ts`, against `MockDiamond` and a blacklistable mock USDC:
+`test/lazo-integrator.test.ts`, against `MockDiamond` and a blacklistable mock USDC (plus
+a plain one for tokens without a blacklist):
 placement, completion, cancellation and its reconciliation, the fee and its snapshot,
 retention, release batching and races, per-vendor segregation, the fee wallet handoff,
 entrance controls, roles, ownership handoff, and reentrancy on `release`.
