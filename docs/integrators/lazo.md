@@ -5,12 +5,13 @@ buyer opens it and pays in local fiat through P2P (Pix, bank transfer to an alia
 Yape / Plin, …); the vendor receives that USDC minus Lazo's fee, with no merchant bank
 account. Proposal: [#109](https://github.com/p2pdotme/payment-integrators/issues/109).
 
-**Status: not deployed against the P2P Diamond yet.**
+**Status: deployed on Base Sepolia against the P2P Diamond, from `c47a088`; awaiting
+registration. Not on mainnet yet.**
 
 | | Base mainnet | Base Sepolia |
 |---|---|---|
-| integrator | `<TBD>` | `<TBD>` |
-| proxyImpl | `<TBD>` | `<TBD>` |
+| integrator | `<TBD>` | [`0xd9d3615175EB6eA4002F3CaD584c06801f532e87`](https://sepolia.basescan.org/address/0xd9d3615175EB6eA4002F3CaD584c06801f532e87#code) |
+| proxyImpl | `<TBD>` | `0x7d2310c71630499DF6063C110D262706ca3713Aa` |
 | owner | a Safe | an EOA |
 | fee wallet | a Safe | an EOA |
 
@@ -128,8 +129,10 @@ only pause and block — reversible by the Safe — and never reach funds.
 
 The escrow is deployed at sign-up or before the first order is placed, never inside
 the callback, so `onOrderComplete` never calls an address without code. The callback's
-execution is about 60k gas (Hardhat, mock Diamond); the Diamond's gas cap for it is one
-of the open questions in #109.
+execution is about 72k gas, measured on a local fork of Base Sepolia against the real
+Diamond (`0xeb0B…beb9`). That Diamond forwards all remaining gas to `onOrderComplete`, with
+no cap, and caps `onOrderCancel` at 250k (ours uses about 21k). The mainnet Diamond runs a
+different build and has not been measured yet.
 
 ## Operations
 

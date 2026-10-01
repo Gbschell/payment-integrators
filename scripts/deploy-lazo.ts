@@ -11,7 +11,8 @@ import { ethers, network } from "hardhat";
  *
  * Required:
  *   DIAMOND_ADDRESS   P2P Diamond
- *   USDC_ADDRESS      Circle USDC (must expose isBlacklisted)
+ *   USDC_ADDRESS      the token the Diamond settles in (Circle USDC on mainnet;
+ *                     isBlacklisted is honoured if the token has it)
  *   OWNER             a Safe on mainnet; never defaults to the deployer
  *   FEE_WALLET        where every escrow sends the fee on release (a Safe on mainnet)
  *
